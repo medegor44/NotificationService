@@ -4,6 +4,6 @@ namespace NotificationExchange.Abstractions;
 
 public interface IExchangeConnector
 {
-    ISessionQueue ConnectUserSession(UserName userName);
-    void DisconnectUserSession(UserName userName, ISessionQueue sessionQueue);
+    ISessionQueue ConnectUserSession(UserId userId);
+    void DisconnectUserSession(UserId userId, ISessionQueue sessionQueue);
 }
