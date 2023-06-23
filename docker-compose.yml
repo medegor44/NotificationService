@@ -1,0 +1,48 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: "social-network"
+      POSTGRES_USER: "social-network-service"
+      POSTGRES_PASSWORD: "postgres"
+    ports:
+      - "5432:5432"
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+  rabbitmq:
+    image: rabbitmq:3.10.7-management
+    hostname: rabbit
+    restart: always
+    environment:
+      - RABBITMQ_DEFAULT_USER=rmuser
+      - RABBITMQ_DEFAULT_PASS=rmpassword
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit disk_free_limit 2147483648
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+  web:
+    build:
+      context: "SocialNetwork"
+      dockerfile: "Dockerfile"
+    image: "hl-social-network"
+    container_name: "hl-social-network"
+    ports:
+      - "5045:80"
+    depends_on:
+      - postgres
+      - rabbitmq
+  notifications:
+    build:
+      context: "NotificationService"
+      dockerfile: "Dockerfile"
+    image: "hl-sn-notification-service"
+    container_name: "hl-sn-notification-service"
+    ports:
+      - "6045:80"
+    depends_on: 
+      - rabbitmq
+      - web
+      
