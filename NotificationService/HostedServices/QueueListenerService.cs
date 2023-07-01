@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using Domain;
+using Microsoft.Extensions.Options;
 using NotificationExchange.Abstractions;
-using NotificationService.Messages;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
@@ -14,28 +14,39 @@ public class QueueListenerService : BackgroundService
     private readonly IExchangeSender _exchange;
     private readonly IModel _channel;
     private readonly IConnection _connection;
+    private QueueDeclareOk _queueMetadata;
 
-    public QueueListenerService(ILogger<QueueListenerService> logger, IExchangeSender exchange)
+    private const string ExchangeName = "NotificationsExchange";
+    private const string PostNotificationRoutingKey = nameof(PostNotificationRoutingKey);
+
+    public QueueListenerService(
+        ILogger<QueueListenerService> logger, 
+        IExchangeSender exchange, 
+        IOptions<ConnectionOptions> connectionOptions,
+        IOptions<FeedNotificationsOptions> feedNotificationsOptions)
     {
         _logger = logger;
         _exchange = exchange;
 
         _connection = new ConnectionFactory()
         {
-            HostName = "localhost",
-            UserName = "rmuser",
-            Password = "rmpassword"
+            HostName = connectionOptions.Value.HostName,
+            UserName = connectionOptions.Value.UserName,
+            Password = connectionOptions.Value.Password,
+            Port = connectionOptions.Value.Port
         }.CreateConnection();
         
         _channel = _connection.CreateModel();
+        _channel.ExchangeDeclare(ExchangeName, type: ExchangeType.Direct);
         
-        _channel.QueueDeclare(
-            queue: "FeedNotifications",
-            durable: false,
-            exclusive: false,
-            autoDelete: false,
-            arguments: null
+        _queueMetadata = _channel.QueueDeclare(
+            queue: feedNotificationsOptions.Value.Name,
+            durable: feedNotificationsOptions.Value.Durable,
+            exclusive: feedNotificationsOptions.Value.Exclusive,
+            autoDelete: feedNotificationsOptions.Value.AutoDelete
         );
+        
+        _channel.QueueBind(_queueMetadata.QueueName, ExchangeName, PostNotificationRoutingKey);
     }
     
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -47,7 +58,7 @@ public class QueueListenerService : BackgroundService
         consumer.Received += ConsumerOnReceived;
 
         _channel.BasicConsume(
-            queue: "FeedNotifications", 
+            queue: _queueMetadata.QueueName, 
             autoAck: false, 
             consumer: consumer);
         
@@ -60,11 +71,10 @@ public class QueueListenerService : BackgroundService
         
         _logger.LogInformation("Received message: {message}", message);
 
-        var newPostMessage = JsonSerializer.Deserialize<NewPostMessage>(message);
+        var notification = JsonSerializer.Deserialize<PostCreatedNotification>(message);
         
-        _exchange.Send(new(
-            new UserName(newPostMessage.UserName), 
-            $"New post from {newPostMessage.AuthorName}"));
+        if (notification is not null)
+            _exchange.Send(new(new UserId(notification.RecipientId), message));
 
         _channel.BasicAck(e.DeliveryTag, false);
     }

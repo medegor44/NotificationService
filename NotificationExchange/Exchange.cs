@@ -6,33 +6,33 @@ namespace NotificationExchange;
 
 public class Exchange : IExchangeConnector, IExchangeSender
 {
-    private readonly ConcurrentDictionary<UserName, UserSessions> _connections = new();
+    private readonly ConcurrentDictionary<UserId, UserSessions> _connections = new();
     
-    public ISessionQueue ConnectUserSession(UserName userName)
+    public ISessionQueue ConnectUserSession(UserId userId)
     {
-        if (!_connections.TryGetValue(userName, out var sessions))
+        if (!_connections.TryGetValue(userId, out var sessions))
         {
             sessions = new UserSessions();
-            _connections.TryAdd(userName, sessions);
+            _connections.TryAdd(userId, sessions);
         }
 
         return sessions.GetSession(Guid.NewGuid());
     }
 
-    public void DisconnectUserSession(UserName userName, ISessionQueue sessionQueue)
+    public void DisconnectUserSession(UserId userId, ISessionQueue sessionQueue)
     {
-        if (!_connections.TryGetValue(userName, out var sessions)) 
+        if (!_connections.TryGetValue(userId, out var sessions)) 
             return;
         
         sessions.RemoveSession(sessionQueue);
         
         if (sessions.Empty)
-            _connections.TryRemove(userName, out _);
+            _connections.TryRemove(userId, out _);
     }
 
     public void Send(Message message)
     {
-        if (!_connections.TryGetValue(message.UserName, out var sessions))
+        if (!_connections.TryGetValue(message.UserId, out var sessions))
             return;
         
         sessions.PushMessage(message);

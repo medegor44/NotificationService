@@ -1,3 +1,3 @@
 ﻿namespace Domain;
 
-public record Message(UserName UserName, string Content);
+public record Message(UserId UserId, string Content);
